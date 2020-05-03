@@ -18,13 +18,6 @@ class Minesweeper(Frame):
         self.spots = []
         self.intermission = False
 
-    def reset(self):
-        del self.spots[:]
-        self.bomb_count = 0
-        self.total_flagged = 0
-
-        self.create_board()
-
     def create_board(self):
         for x in range(0, self.dimensions[0]):
             Grid.rowconfigure(self, x, weight=1)
@@ -80,6 +73,13 @@ class Minesweeper(Frame):
     def game_over(self):
         self.reveal_all()
         self.prompt("Game over!", "You hit a bomb!\nWould you like to play again?", self.reset)
+
+    def reset(self):
+        del self.spots[:]
+        self.bomb_count = 0
+        self.total_flagged = 0
+
+        self.create_board()
 
     def prompt(self, title, msg, callback):
         option = messagebox.askyesno(title, msg)
