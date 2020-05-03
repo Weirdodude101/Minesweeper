@@ -1,189 +1,206 @@
 from tkinter import *
 from tkinter import messagebox
-import sys
-import random
 
+import os
+import random
+import sys
+import time
 
 class Minesweeper(Frame):
-    def __init__(self, root, x, y, b2Gen):
+    def __init__(self, root, x, y, bomb_total):
         Frame.__init__(self, root)
         self.grid(row=0, column=0, sticky=N+S+E+W)
 
         self.dimensions = (x, y)
-        self.bombs = 0
-        self.b2Gen = b2Gen
-        self.regular = 0
-        self.buttons = {}
+        self.bomb_count = 0
+        self.total_flagged = 0
+        self.bomb_total = bomb_total
+        self.spots = []
+        self.intermission = False
 
-        self.areas = ["-1:-1","-1:0","-1:1",
-                      "0:-1", "0:0", "0:1",
-                      "1:-1", "1:0", "1:1"]
+    def reset(self):
+        del self.spots[:]
+        self.bomb_count = 0
+        self.total_flagged = 0
 
-    def createBoard(self):
-        # Generate the board
+        self.create_board()
+
+    def create_board(self):
         for x in range(0, self.dimensions[0]):
             Grid.rowconfigure(self, x, weight=1)
             for y in range(0, self.dimensions[1]):
                 Grid.columnconfigure(self, y, weight=1)
-                button = Button(self)
-                button.pack()
-                button.grid(row=x, column=y, sticky=N+S+E+W)
-                self.regular += 1
-                # Create the button dictionary.
+                spot = Spot(self)
+                spot.setup(x, y)
+                self.spots.append(spot)
+        
+        for spot in self.spots:
+            spot.get_spots_around()
 
-                self.buttons[button] = {
-                    "id": None,
-                    "type": None,
-                    "around": 0,
-                    "flagged": False
-                }
+    def generate_bombs(self):
+        random.seed(os.urandom(10)) #Magic number time
+        bombs = []
 
-                self.buttons[button]['id'] = '%s:%s' % (x,y)
+        while len(bombs) < self.bomb_total:
+            bomb_sample = random.sample(self.spots, self.bomb_total - len(bombs))
+            for bomb in bomb_sample.copy():
+                s_spots = bomb.get_spots_around()
+                for s_spot in s_spots:
+                    if (s_spot.is_marked() or bomb.is_marked()) and bomb in bomb_sample:
+                        bomb_sample.remove(bomb)
+        
+            bombs = list(set(bombs + bomb_sample))
+                    
+        for bomb in bombs:
+            if not bomb.is_marked():
+                bomb.prime()
+                bomb.configure(text="B")
+                self.bomb_count += 1
+    
+    def reveal_spots(self, spot):
+        for s_spot in spot.get_spots_around():
+            if not s_spot.is_marked():
+                s_spot.select()
 
-        for button in list(self.buttons):
-            # Assign the IDs to the buttons and configure them.
-            button.configure(command=lambda x=self.buttons[button], y=button:self.select(x, y))
-            button.bind('<Button-2>', lambda e, x=self.buttons[button], y=button:self.flag(x, y))
+    def reveal_all(self):
+        self.intermission = True
+        for spot in self.spots:
+            if not spot.is_bomb():
+                spot.select()
+    
+    def win_check(self):
+        marked = [spot for spot in self.spots if getattr(spot, "marked")]
+        if len(self.spots) - len(marked) == self.get_bomb_total() or self.get_total_flagged() >= self.get_bomb_count():
+            self.win()
+    
+    def win(self):
+        self.reveal_all()
+        self.prompt("You win!", "You won the game!\nWould you like to play again?", self.reset)
+    
+    def game_over(self):
+        self.reveal_all()
+        self.prompt("Game over!", "You hit a bomb!\nWould you like to play again?", self.reset)
 
-    def select(self, obj, btn):
-        # Select a button
-
-        if not self.bombs:
-            self.setup(obj, self.b2Gen)
-
-        if obj['type'] != 2:
-            if not obj['flagged']:
-                btn.configure(text=obj['around'])
-                if obj['around'] == 0:
-                    self.revealAround(obj)
-                btn['state'] = 'disabled'
-                obj['type'] = -1
-                self.check(obj)
-        else:
-            self.bombed()
-
-    def revealAround(self, obj):
-        areas = self.areas[:]
-        remove = [0,2,6,8]
-        for index in sorted(remove, reverse=True):
-            del areas[index]
-        for x in areas:
-            objId = obj['id'].split(':')
-            r = int(objId[0]) + int(x.split(':')[0])
-            c = int(objId[1]) + int(x.split(':')[1])
-            btn = [key for key, value in self.buttons.items() if value['id'] == f'{r}:{c}']
-            if btn:
-                if self.buttons[btn[0]]['around'] == 0:
-                    btn[0].configure(text=self.buttons[btn[0]]['around'])
-                    btn[0]['state'] = 'disabled'
-
-                    obj = self.buttons[btn[0]]
-
-
-    def flag(self, obj, btn):
-        # Flag a button
-        if obj['type'] != -1:
-            if obj['flagged']:
-                obj['flagged'] = False
-
-                if obj['type'] == 2:
-                    self.bombs += 1
-                btn.configure(text='')
-            else:
-                obj['flagged'] = True
-                if obj['type'] == 2:
-                    self.bombs -= 1
-                btn.configure(text=u"\u2691")
-                self.check(obj)
-
-    def check(self, obj):
-        if self.bombs <= 0 or self.regular <= 0:
-            self.askyesno(title='You won!', msg="You won the game!\nWould you like to play again?", cb1=sys.exit, cb2=self.reset)
-
-    def setup(self, obj, amt):
-        # Generate the bombs
-
-        self.bombs = amt
-        self.regular -= amt
-        bbtnList = btnList = list(self.buttons)
-
-        for x in range(0, amt):
-            btn = random.choice(btnList)
-            if self.buttons[btn]['type'] == None and self.buttons[btn]['id'] != obj['id']:
-                self.buttons[btn]['type'] = 2
-                self.buttons[btn]['around'] = -1
-                bbtnList.remove(btn)
-
-        # Get the bombs around each button that is not a bomb.
-
-        for object in btnList:
-            if self.buttons[object]['type'] != 2:
-                objId = self.buttons[object]['id'].split(':')
-                for y in self.areas:
-                    r = int(objId[0]) + int(y.split(':')[0])
-                    c = int(objId[1]) + int(y.split(':')[1])
-                    btn = [key for key, value in self.buttons.items() if value['id'] == f'{r}:{c}']
-                    if btn:
-                        if self.buttons[btn[0]]['type'] == 2:
-                            if self.buttons[object]['type'] != 1:
-                                self.buttons[object]['type'] = 1
-                            self.buttons[object]['around'] += 1
-
-    def bombed(self):
-        self.revealBoard()
-        self.askyesno(title='You lost!', msg="You hit a bomb!\nWould you like to play again?", cb1=sys.exit, cb2=self.reset)
-
-    def revealBoard(self):
-        for obj in self.buttons:
-            if self.buttons[obj]['type'] != 2:
-                obj.configure(text=self.buttons[obj]['around'])
-                obj['state'] = 'disabled'
-                continue
-            obj.configure(text='X')
-
-
-    def askyesno(self, title="", msg="", cb1=None, cb2=None):
+    def prompt(self, title, msg, callback):
         option = messagebox.askyesno(title, msg)
-        if option != None:
-            if not option:
-                cb1()
-            cb2()
+        if option:
+            callback()
+            return
+        sys.exit()
+    
+    def set_total_flagged(self, total_flagged):
+        self.total_flagged = total_flagged
 
-    def reset(self):
-        # Reset the board
+    def get_total_flagged(self):
+        return self.total_flagged
 
-        for x in self.buttons:
-            self.buttons[x]['type'] = None
-            self.buttons[x]['around'] = 0
-            self.buttons[x]['flagged'] = False
-            self.bombs = 0
-            self.regular = self.dimensions[0] * self.dimensions[1]
-            x['state'] = 'normal'
-            x.configure(text='')
+    def get_bomb_count(self):
+        return self.bomb_count
 
+    def get_bomb_total(self):
+        return self.bomb_total
+    
+    def get_spot_by_position(self, position):
+        for spot in self.spots:
+            if spot.get_position() == position:
+                return spot
 
+class Spot(Button):
+    def __init__(self, *args, **kwargs):
+        Button.__init__(self, *args, **kwargs)
+        self.game = args[0]
+        self.bomb = False
+        self.flagged = False
+        self.marked = False
 
+        self.bombs_around = None
+        self.position = (None, None)
+
+        self.surrounding_spots = []
+    
+    def setup(self, x, y):
+        self.grid(row=x, column=y, sticky=N+S+E+W)
+        
+        self.position = (x, y)
+        self.configure(command=self.select)
+        self.bind('<Button-3>', lambda e: self.toggle_flag())
+
+    def toggle_flag(self):
+        if self.game.get_bomb_count() > 0 and not self.is_marked():
+            self.flagged = not self.flagged
+            self.configure(text=("\u2691" if self.flagged else ""))
+            if self.is_bomb():
+                self.game.set_total_flagged(self.game.get_total_flagged() + (1 if self.flagged else -1))
+                self.game.win_check()
+    
+    def select(self):
+        if self.is_bomb():
+            self.game.game_over()
+            return
+        
+        self.marked = True
+
+        if self.game.get_bomb_count() <= 0:
+            self.game.generate_bombs()
+
+        if self.get_bombs_around() == 0:
+            self.game.reveal_spots(self)
+
+        if not self.game.intermission:
+            self.game.win_check()
+        self.configure(text=self.get_bombs_around(), bg="white", state=DISABLED)
+    
+    def mark(self):
+        self.marked = True
+
+    def prime(self):
+        self.bomb = True
+    
+    def get_position(self):
+        return self.position
+    
+    def get_bombs_around(self):
+        if self.bombs_around == None:
+            self.bombs_around = 0
+            for spot in self.get_spots_around():
+                if spot.is_bomb():
+                    self.bombs_around += 1
+
+        return self.bombs_around
+    
+    def get_spots_around(self):
+        if len(self.surrounding_spots) <= 0:
+            row = self.get_position()[0]
+            column = self.get_position()[1]
+
+            for x in range(column-1, column+2):
+                for y in range(row-1, row+2):
+                    s_spot = self.game.get_spot_by_position((y,x))
+                    if not s_spot:
+                        continue
+
+                    if s_spot.get_position() != self.get_position():
+                        self.surrounding_spots.append(s_spot)
+
+        return self.surrounding_spots
+        
+    def is_bomb(self):
+        return self.bomb
+
+    def is_flagged(self):
+        return self.flagged
+    
+    def is_marked(self):
+        return self.marked
 
 root = Tk()
-"""while True:
-    x = int(input('Rows (Minimum 4): '))
-    y = int(input('Columns (Minimum 4): '))
-    if x < 4 or y < 4:
-        print('Minimum amount of rows and/or columns is 4')
-    else:
-        break
 
-while True:
-    b = int(input('Bombs: '))
-    if b >= x*y:
-        print('Amount of bombs cannot be greater then or equal to the amount of spaces')
-    else:
-        break"""
-x = 16
-y = 16
-b = 32
-game = Minesweeper(root, x, y, b)
-game.createBoard()
+columns = 8
+rows = 8
+bombs = 32
+
+game = Minesweeper(root, rows, columns, bombs)
+game.create_board()
 
 Grid.rowconfigure(root, 0, weight=1)
 Grid.columnconfigure(root, 0, weight=1)
