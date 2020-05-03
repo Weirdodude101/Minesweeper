@@ -57,9 +57,8 @@ class Minesweeper(Frame):
     def reveal_all(self):
         self.intermission = True
         for spot in self.spots:
-            if not spot.is_bomb():
-                spot.select()
-    
+            spot.configure(text="\U0001F4A3") if spot.is_bomb() else spot.select()
+
     def win_check(self):
         marked = [spot for spot in self.spots if getattr(spot, "marked")]
         if len(self.spots) - len(marked) == self.get_bomb_total() or self.get_total_flagged() >= self.get_bomb_count():
@@ -83,8 +82,7 @@ class Minesweeper(Frame):
     def prompt(self, title, msg, callback):
         option = messagebox.askyesno(title, msg)
         if option:
-            callback()
-            return
+            return callback()
         sys.exit()
     
     def set_total_flagged(self, total_flagged):
