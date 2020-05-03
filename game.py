@@ -47,7 +47,6 @@ class Minesweeper(Frame):
         for bomb in bombs:
             if not bomb.is_marked():
                 bomb.prime()
-                bomb.configure(text="B")
                 self.bomb_count += 1
     
     def reveal_spots(self, spot):
