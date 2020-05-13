@@ -1,7 +1,6 @@
 from tkinter import *
 from tkinter import messagebox
 
-import os
 import random
 import sys
 import time
@@ -31,7 +30,7 @@ class Minesweeper(Frame):
             spot.get_spots_around()
 
     def generate_bombs(self):
-        random.seed(os.urandom(10)) #Magic number time
+        random.seed(random.random())
         bombs = []
 
         while len(bombs) < self.bomb_total:
@@ -194,7 +193,7 @@ root = Tk()
 
 columns = 8
 rows = 8
-bombs = 32
+bombs = 24
 
 game = Minesweeper(root, rows, columns, bombs)
 game.create_board()
